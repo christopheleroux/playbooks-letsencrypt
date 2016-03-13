@@ -1,0 +1,31 @@
+---
+- hosts: letsencrypt
+  become: true
+  vars:
+    letsencrypt_certsdir : /etc/letsencrypt/live
+    letsencrypt_command : /opt/letsencrypt/letsencrypt-auto
+    letsencrypt_port : 9999
+  tasks :
+    - name : List available letsencrypt certificates
+      find: paths="{{ letsencrypt_certsdir }}/" file_type="directory"
+      register: certificates
+
+    - name : Test Certificate validity in 2 weeks (1814400)
+      shell : openssl x509 -checkend 1814400 -noout -in {{letsencrypt_certsdir}}/{{ item.path | basename }}/fullchain.pem
+      register: letsencrypt_update
+      with_items: "{{certificates.files}}"
+      ignore_errors: True
+      failed_when: False
+      changed_when: "letsencrypt_update.rc != 0"
+      always_run: yes
+      no_log: True
+
+    - name: renew Certificate
+      shell: "{{letsencrypt_command}} --no-self-upgrade --text --agree-tos
+            --standalone --renew-by-default -d {{item.item.path | basename}}
+            --email={{ email }}
+            --standalone-supported-challenges=http-01
+            --http-01-port={{letsencrypt_port}} --dry-run certonly"
+      register: renew
+      with_items: letsencrypt_update.results
+      when: item.changed

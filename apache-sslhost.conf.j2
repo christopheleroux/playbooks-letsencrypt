@@ -1,0 +1,19 @@
+<VirtualHost *:443>
+        ServerAdmin {{ email }}
+        ServerName {{ domain }}
+        UseCanonicalName off
+
+        DocumentRoot {{ docroot }}
+        <Directory {{ docroot }}>
+                Options FollowSymLinks Indexes
+                AllowOverride None
+        </Directory>
+
+        ErrorLog /var/log/apache2/error.log
+        LogLevel warn
+        CustomLog /var/log/apache2/access.log combined
+
+        SSLEngine On
+        SSLCertificateFile /etc/letsencrypt/live/{{ domain }}/fullchain.pem
+        SSLCertificateKeyFile /etc/letsencrypt/live/{{ domain }}/privkey.pem
+</VirtualHost>

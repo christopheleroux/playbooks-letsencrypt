@@ -1,0 +1,8 @@
+
+---
+- hosts: nas
+  become: true
+  roles:
+    - { role: opdavies.letsencrypt, letsencrypt_dir: /opt/letsencrypt }
+
+# TODO apache proxy config

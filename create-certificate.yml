@@ -1,0 +1,65 @@
+---
+- hosts: letsencrypt
+  become: true
+  vars:
+    letsencrypt_certsdir : /etc/letsencrypt/live
+    letsencrypt_command : /opt/letsencrypt/letsencrypt-auto
+    letsencrypt_port : 9999
+
+  vars_prompt:
+  - name: "domain"
+    prompt: "Domain to create certificate : "
+  - name: "email"
+    prompt: "Admin email : "
+  tasks :
+    # renew + --renew-by-default
+    # TODO
+    # - option renew : --renew-by-default
+    # - option dry run : --dry-run
+    - name : Get letsencrypt certificates for domain {{ domain }}
+      shell: "{{letsencrypt_command}} --no-self-upgrade --text --agree-tos
+              --standalone -d {{ domain }}
+              --email={{ email }}
+              --standalone-supported-challenges=http-01
+              --http-01-port={{letsencrypt_port}} certonly"
+      register: created
+
+    - set_fact: conf_file=/etc/apache2/sites-available/{{ domain.split('.') | reverse | join(".")}}.conf
+       # conf in file :  /etc/apache2/sites-available{{ reverse domain }}.conf
+    - name: Check whether https config already exists
+      command: awk /:443/ {{ conf_file }}
+      changed_when: checkhttps.stdout == ""
+      register: checkhttps
+
+    - name: Replace existing Certificate in conf
+      lineinfile: dest={{ conf_file }}
+        regexp={{ item.regexp }}
+        line={{ item.line }}
+        state=present
+      with_items:
+        - { regexp: "SSLCertificateFile" , line: "SSLCertificateFile /etc/letsencrypt/live/{{ domain }}/fullchain.pem" }
+        - { regexp: "SSLCertificateKeyFile" , line: "SSLCertificateKeyFile /etc/letsencrypt/live/{{ domain }}/privkey.pem" }
+      when: not checkhttps.changed
+      notify:
+        - reload apache
+
+      # Create new ssl host config
+    - name: Extract current http host DocRoot
+      shell : /bin/grep -i 'DocumentRoot' {{ conf_file }} | cut -f2 -d' '
+      register: docroot
+      when: checkhttps.changed
+      changed_when: false
+    - set_fact: docroot={{ docroot.stdout }}
+      when: checkhttps.changed
+
+    - name: Create https virtualhost conf
+      template: src=apache-sslhost.conf.j2 dest=/tmp/sslhost
+      when: checkhttps.changed
+    - shell: cat /tmp/sslhost >> {{ conf_file }} && rm /tmp/sslhost
+      when: checkhttps.changed
+      notify:
+        - reload apache
+
+  handlers:
+    - name: reload apache
+      service: name=apache2 state=reloaded
