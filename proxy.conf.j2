@@ -1,0 +1,10 @@
+<IfModule mod_proxy.c>
+        ProxyPass "/.well-known/acme-challenge/" "http://127.0.0.1:9999/.well-known/acme-challenge/" retry=1
+        ProxyPassReverse "/.well-known/acme-challenge/" "http://127.0.0.1:9999/.well-known/acme-challenge/"
+        <Location "/.well-known/acme-challenge/">
+                ProxyPreserveHost On
+                Order allow,deny
+                Allow from all
+                Require all granted
+        </Location>
+</IfModule>

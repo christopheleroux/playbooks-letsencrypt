@@ -1,8 +1,32 @@
 
 ---
-- hosts: nas
+- hosts: letsencrypt
+  become: true
+  tasks:
+    - name: Ensure git installed
+      apt: name=git state=present
+
+
+- hosts: letsencrypt
   become: true
   roles:
     - { role: opdavies.letsencrypt, letsencrypt_dir: /opt/letsencrypt }
+  tasks:
+    - name : Proxy configuration
+      copy: src=proxy.conf.j2 dest=/etc/apache2/mods-available/proxy.conf
+      register: set_proxyconf
+      notify :
+        - reload apache
 
-# TODO apache proxy config
+    - name: Load proxy mod
+      apache2_module: state=present name={{ item }}
+      when: set_proxyconf.changed
+      with_items:
+        - proxy
+        - proxy_http
+      notify :
+        - reload apache
+
+  handlers:
+    - name : reload apache
+      service: name=apache2 state=reloaded
