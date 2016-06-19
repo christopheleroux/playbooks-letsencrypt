@@ -1,6 +1,7 @@
 ---
 - hosts: letsencrypt
   become: true
+  gather_facts: False
   vars:
     letsencrypt_certsdir : /etc/letsencrypt/live
     letsencrypt_command : /opt/letsencrypt/letsencrypt-auto
@@ -20,12 +21,23 @@
       always_run: yes
       no_log: True
 
+    - debug: msg="renew {{ item.item.path}}"
+      with_items: letsencrypt_update.results
+      when: item.changed
+      # TODO display current end date with openssl x509 -enddate -noout -in fullchain.pem
+
     - name: renew Certificate
       shell: "{{letsencrypt_command}} --no-self-upgrade --text --agree-tos
             --standalone --renew-by-default -d {{item.item.path | basename}}
-            --email={{ email }}
+            --email={{ cert_email }}
             --standalone-supported-challenges=http-01
-            --http-01-port={{letsencrypt_port}} --dry-run certonly"
+            --http-01-port={{letsencrypt_port}} certonly"
       register: renew
       with_items: letsencrypt_update.results
       when: item.changed
+      notify:
+        - reload apache
+
+  handlers:
+    - name: reload apache
+      service: name=apache2 state=reloaded
